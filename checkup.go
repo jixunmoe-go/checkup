@@ -49,6 +49,25 @@ type Checkup struct {
 // returned in the case of a misconfiguration or if
 // any one of the Checkers returns an error.
 func (c Checkup) Check() ([]types.Result, error) {
+	var latestResult []types.Result = nil
+	var historyReader types.HistoryReader = nil
+	if reader, ok := c.Storage.(types.HistoryReader); ok {
+		historyReader = reader
+		entries, err := reader.GetIndex()
+		highestTime := int64(0)
+		highestName := ""
+		if err == nil {
+			for name, ts := range entries {
+				if ts > highestTime {
+					highestTime, highestName = ts, name
+				}
+			}
+		}
+		if highestName != "" {
+			latestResult, _ = reader.Fetch(highestName)
+		}
+	}
+
 	if c.ConcurrentChecks == 0 {
 		c.ConcurrentChecks = DefaultConcurrentChecks
 	}
@@ -84,7 +103,12 @@ func (c Checkup) Check() ([]types.Result, error) {
 	}
 
 	for _, service := range c.Notifiers {
-		err := service.Notify(results)
+		var err error
+		if downTimeNotifier, ok := service.(types.DownTimeNotifier); ok {
+			err = downTimeNotifier.NotifyDowntime(results, latestResult, historyReader)
+		} else {
+			err = service.Notify(results)
+		}
 		if err != nil {
 			log.Printf("ERROR sending notifications for %s: %s", service.Type(), err)
 		}

@@ -2,9 +2,11 @@ package fs
 
 import (
 	"encoding/json"
+	"github.com/sourcegraph/checkup/storage/util"
 	"io/ioutil"
 	"os"
 	"path/filepath"
+	"sort"
 	"time"
 
 	"github.com/sourcegraph/checkup/types"
@@ -117,6 +119,52 @@ func (fs Storage) Store(results []types.Result) error {
 
 	// Write new index
 	return fs.writeIndex(index)
+}
+
+type simpleIndex struct {
+	ts   int64
+	name string
+}
+
+func (fs Storage) FindLastWorkingTime(current *types.Result) int64 {
+	index, err := fs.GetIndex()
+	if err != nil {
+		return -1
+	}
+
+	var items []simpleIndex
+	for key, ts := range index {
+		if ts >= current.Timestamp {
+			continue
+		}
+
+		items = append(items, simpleIndex{
+			ts:   ts,
+			name: key,
+		})
+	}
+
+	sort.Slice(items, func(i, j int) bool {
+		return items[i].ts > items[j].ts
+	})
+
+	for _, item := range items {
+		results, err := fs.Fetch(item.name)
+		if err != nil {
+			return -2
+		}
+
+		matched := util.FindResultOfSameType(current, results)
+		if matched == nil {
+			return -3
+		}
+
+		if matched.Healthy {
+			return matched.Timestamp
+		}
+	}
+
+	return -9
 }
 
 // Maintain deletes check files that are older than fs.CheckExpiry.

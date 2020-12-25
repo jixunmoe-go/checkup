@@ -8,3 +8,6 @@ builds/
 dist/
 checks/
 .envrc
+
+*.exe
+/var/
