@@ -3,6 +3,7 @@ package checkup
 import (
 	"encoding/json"
 	"fmt"
+	"github.com/sourcegraph/checkup/notifier/webapi"
 
 	"github.com/sourcegraph/checkup/notifier/discord"
 	"github.com/sourcegraph/checkup/notifier/mail"
@@ -23,6 +24,8 @@ func notifierDecode(typeName string, config json.RawMessage) (Notifier, error) {
 		return pushover.New(config)
 	case discord.Type:
 		return discord.New(config)
+	case webapi.Type:
+		return webapi.New(config)
 	default:
 		return nil, fmt.Errorf(errUnknownNotifierType, typeName)
 	}
